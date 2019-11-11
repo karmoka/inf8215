@@ -101,6 +101,8 @@ class State:
                 if rh.move_on[i] > self.pos[0] + 1:
                     # Seulement si l'auto s'etend sur la rangee de l'auto (ligne 2)
                     if self.pos[i] <= 2 and (self.pos[i] + rh.length[i] - 1 ) >= 2:
+                        # Calcule le poid pour liberer le point et 
+                        #   donne du poids additionel à ceux le plus à droite (plus limité, on préfère normalement tout envoyer vers la gauche)
                         car_weight += self.cost_to_free(rh, 2, rh.move_on[i]) + 2*rh.move_on[i]
                         self.cycle.add(i)
         self.score = (6 - self.pos[0] - 2) + car_weight + 2*len(self.cycle)
@@ -213,15 +215,8 @@ class MiniMaxSearch:
             print("check (c={})(d={:2d})(score={})".format(best.c, best.d, best.score))
             print(best.cycle)
         if current_depth < self.search_depth:
-            for move in moves:
-                # Pour sauver du temps, on ne considere pas les mouvements directement opposé au précédent
-                # if move.c == self.state.c and move.d == self.state.d * -1:
-                #     continue
-                
+            for move in moves:          
                 best_kid = self.minimax_1(current_depth + 1, move)
-                # if move.c not in best_kid.cycle:
-                #     best_kid.score += 200
-
                 # Si le futur de ce mouvement est avantageux, on l'adopte
                 # On ne veut pas bouger des voitures qui ne bloquent rien et ne sont pas dams le chemin de la voiture rouge (pas dans un cycle)
                 if best_kid.score < best.score:
@@ -318,32 +313,33 @@ class MiniMaxSearch:
 #                  ["rouge", "vert", "bleu", "orange", "jaune"])
 # s = State([1, 0, 1, 3, 2])
 # rh.print_pretty_grid(s)
-# algo = MiniMaxSearch(rh, s,1) 
+# algo = MiniMaxSearch(rh, s,2) 
 # algo.rushhour.init_positions(s)
 # print(algo.rushhour.free_pos)
 # algo.solve(s, True)
 
 
-# rh = Rushhour([True, True, False, False, True, True, False, False],
-#                  [2, 2, 3, 2, 3, 2, 3, 3],
-#                  [2, 0, 0, 0, 5, 4, 5, 3],
-#                  ["rouge", "vert", "mauve", "orange", "emeraude", "lime", "jaune", "bleu"])
-# s = State([1, 0, 1, 4, 2, 4, 0, 1])
-# algo = MiniMaxSearch(rh, s, 2) 
-# algo.rushhour.init_positions(s)
-# print(algo.rushhour.free_pos)
-# algo.solve(s, True)
-
-# solution optimale: 14 moves
-rh = Rushhour([True, False, True, False, False, False, True, True, False, True, True],
-                 [2, 2, 3, 2, 2, 3, 3, 2, 2, 2, 2],
-                 [2, 0, 0, 3, 4, 5, 3, 5, 2, 5, 4],
-                 ["rouge", "vert", "mauve", "orange", "emeraude", "lime", "jaune", "bleu", "x", "y", "z"])
-s = State([0, 0, 3, 1, 2, 1, 0, 0, 4, 3, 4])
-algo = MiniMaxSearch(rh, s,2)
+# solution optimale: 16 moves
+rh = Rushhour([True, True, False, False, True, True, False, False],
+                 [2, 2, 3, 2, 3, 2, 3, 3],
+                 [2, 0, 0, 0, 5, 4, 5, 3],
+                 ["rouge", "vert", "mauve", "orange", "emeraude", "lime", "jaune", "bleu"])
+s = State([1, 0, 1, 4, 2, 4, 0, 1])
+algo = MiniMaxSearch(rh, s, 2) 
 algo.rushhour.init_positions(s)
 print(algo.rushhour.free_pos)
 algo.solve(s, True)
+
+# solution optimale: 14 moves
+# rh = Rushhour([True, False, True, False, False, False, True, True, False, True, True],
+#                  [2, 2, 3, 2, 2, 3, 3, 2, 2, 2, 2],
+#                  [2, 0, 0, 3, 4, 5, 3, 5, 2, 5, 4],
+#                  ["rouge", "vert", "mauve", "orange", "emeraude", "lime", "jaune", "bleu", "x", "y", "z"])
+# s = State([0, 0, 3, 1, 2, 1, 0, 0, 4, 3, 4])
+# algo = MiniMaxSearch(rh, s,2)
+# algo.rushhour.init_positions(s)
+# print(algo.rushhour.free_pos)
+# algo.solve(s, True)
 
 
 algo.print_history()
