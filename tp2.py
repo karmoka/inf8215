@@ -58,8 +58,9 @@ class State:
 
             next_car = self.find_car(rh, x, y)
             if self.rock is not None and x == self.rock[0] and y == self.rock[1]:
-                cost += 10
-                break # Inutile de prendre en compte le reste la chaine puisqu'elle est bloquee
+                # Le mouvement sur cette case n'est pas valide, mais on veut
+                # quand meme continuer l'evaluation de la chaine pour faire un choix eclairé
+                cost += 20  
             elif next_car is None:
                 cost += 1
             elif next_car in self.cycle:
@@ -170,16 +171,37 @@ class Rushhour:
     
     def possible_rock_moves(self, state):
         self.init_positions(state)
+        
+        def valid_pos(pos):
+            return pos[0] >= 0 and pos[0] <=5 and pos[1] >= 0 and pos[1] <= 5
+
+        def rock_valid(pos):
+            consecutive = False if state.rock is None else (pos[0] == state.rock[0] or pos[1] == state.rock[1])
+            return pos[0] != 2 and self.free_pos[pos[0]][pos[1]] and not consecutive
+
         new_states =[]
-        for row in range(len(self.free_pos)):
-            if row == 2:
-                continue
-            for column in range(len(self.free_pos[0])):
-                if state.rock is not None:
-                    if row == state.rock[0] or column == state.rock[1]:
-                        continue
-                if self.free_pos[row][column]:
-                    new_states.append(state.put_rock((row, column)))
+        explored = set()
+        for car in range(self.nbcars):
+            start_tup = state.pos[car]-1, self.move_on[car]
+            end_tup = state.pos[car] + self.length[car], self.move_on[car]
+            if self.horiz[car]:
+                start_tup = start_tup[1], start_tup[0]
+                end_tup = end_tup[1], end_tup[0]
+
+            if start_tup not in explored and valid_pos(start_tup) and rock_valid(start_tup):
+                new_states.append(state.put_rock(start_tup))
+                explored.add(start_tup)
+
+            if end_tup not in explored and valid_pos(end_tup) and rock_valid(end_tup):
+                new_states.append(state.put_rock(end_tup))
+                explored.add(end_tup)
+
+        if len(new_states) == 0:
+            for i in range(len(self.free_pos)):
+                for j in range(len(self.free_pos)):
+                    if rock_valid((i, j)):
+                        new_states.append(state.put_rock((i, j)))
+                        return new_states
         return new_states
     
 
@@ -248,8 +270,33 @@ class MiniMaxSearch:
         return best
 
     def minimax_pruning(self, current_depth, current_state, is_max, alpha, beta):
-        #TODO
-        return best_move
+        moves = self.rushhour.possible_moves(current_state) if is_max else self.rushhour.possible_rock_moves(current_state)
+        for move in moves:
+            move.score_state(self.rushhour)
+        
+        if is_max:
+            best = min(moves, key=lambda x: x.score)
+        else:
+            best = max(moves, key=lambda x: x.score)
+
+        if current_depth < self.search_depth:
+            for move in moves:          
+                best_kid = self.minimax_pruning(current_depth + 1, move, not is_max, alpha, beta)
+                # v = max(v, value(successor, α, β)) et v = min(v, value(successor, α, β))
+                if (is_max and best_kid.score < best.score) or (not is_max and best_kid.score >= best.score):
+                    best = move
+                    best.score = best_kid.score
+                if is_max:
+                    # if v ≥ β return v et α = max(α, v)
+                    if best.score >= beta:
+                        return best
+                    alpha = max(alpha, best.score)
+                else:
+                    # if v ≤ α return v et β = min(β, v)
+                    if best.score <= alpha:
+                        return best
+                    beta = min(beta, best.score)
+        return best
 
     def expectimax(self, current_depth, current_state, is_max):
         #TODO
@@ -266,8 +313,9 @@ class MiniMaxSearch:
         self.rushhour.print_pretty_grid(self.state)
 
     def decide_best_move_pruning(self, is_max):
-        # TODO
-        pass
+        self.state = self.minimax_pruning(0, self.state, is_max, -math.inf, math.inf)
+        self.print_move(True, self.state)
+        self.rushhour.print_pretty_grid(self.state)
 
     def decide_best_move_expectimax(self, is_max):
         # TODO
@@ -282,7 +330,8 @@ class MiniMaxSearch:
             self.rushhour.print_pretty_grid(self.state)
             is_max = True 
             while not self.state.success():
-                self.decide_best_move_2(is_max=is_max)
+                # self.decide_best_move_2(is_max=is_max)
+                self.decide_best_move_pruning(is_max=is_max)
                 is_max = not is_max
 
     def print_move(self, is_max, state):
@@ -324,15 +373,15 @@ class MiniMaxSearch:
 
 
 # solution optimale: 16 moves
-rh = Rushhour([True, True, False, False, True, True, False, False],
-                 [2, 2, 3, 2, 3, 2, 3, 3],
-                 [2, 0, 0, 0, 5, 4, 5, 3],
-                 ["rouge", "vert", "mauve", "orange", "emeraude", "lime", "jaune", "bleu"])
-s = State([1, 0, 1, 4, 2, 4, 0, 1])
-algo = MiniMaxSearch(rh, s, 2) 
-algo.rushhour.init_positions(s)
-print(algo.rushhour.free_pos)
-algo.solve(s, False)
+# rh = Rushhour([True, True, False, False, True, True, False, False],
+#                  [2, 2, 3, 2, 3, 2, 3, 3],
+#                  [2, 0, 0, 0, 5, 4, 5, 3],
+#                  ["rouge", "vert", "mauve", "orange", "emeraude", "lime", "jaune", "bleu"])
+# s = State([1, 0, 1, 4, 2, 4, 0, 1])
+# algo = MiniMaxSearch(rh, s, 3) 
+# algo.rushhour.init_positions(s)
+# print(algo.rushhour.free_pos)
+# algo.solve(s, False)
 
 # solution optimale: 14 moves
 # rh = Rushhour([True, False, True, False, False, False, True, True, False, True, True],
@@ -345,6 +394,15 @@ algo.solve(s, False)
 # print(algo.rushhour.free_pos)
 # algo.solve(s, True)
 
+rh = Rushhour([True, False, False, False, True],
+                 [2, 3, 2, 3, 3],
+                 [2, 4, 5, 1, 5],
+                 ["rouge", "vert", "bleu", "orange", "jaune"])
+s = State([1, 0, 1, 3, 2])
+algo = MiniMaxSearch(rh, s,3)
+algo.rushhour.init_positions(s)
+print(algo.rushhour.free_pos)
+algo.solve(s, False)
 
 algo.print_history()
 
