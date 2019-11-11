@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import copy
+import random
 from collections import deque
 from itertools import chain
 
@@ -252,21 +253,12 @@ class MiniMaxSearch:
         else:
             best = max(moves, key=lambda x: x.score)
 
-        if current_depth == 0:
-            print("check (c={})(d={:2d})(score={})".format(best.c, best.d, best.score))
-            print(best.cycle)
-
         if current_depth < self.search_depth:
             for move in moves:          
                 best_kid = self.minimax_2(current_depth + 1, move, not is_max)
                 if (is_max and best_kid.score < best.score) or (not is_max and best_kid.score > best.score):
                     best = move
                     best.score = best_kid.score
-                if current_depth == 0:
-                    print("check (c={0})(d={1:2d})(score={2}) -> (c={3},d={4:2d},s={5})".format(
-                        self.rushhour.color[move.c][0], move.d, move.score,
-                        self.rushhour.color[best.c][0], best.d, best.score))
-                    print(move.cycle)
         return best
 
     def minimax_pruning(self, current_depth, current_state, is_max, alpha, beta):
@@ -299,8 +291,36 @@ class MiniMaxSearch:
         return best
 
     def expectimax(self, current_depth, current_state, is_max):
-        #TODO
-        return best_move
+        moves = self.rushhour.possible_moves(current_state) if is_max else self.rushhour.possible_rock_moves(current_state)
+        for move in moves:
+            move.score_state(self.rushhour)
+        
+        if is_max:
+            best = min(moves, key=lambda x: x.score)
+        else:
+            random_probs = [1/len(moves)] * len(moves)
+            best = np.random.choice(moves, 1, p=random_probs)[0]
+            best.score = 0 # prend la valeur de la sortie probable (plus tard)
+
+        if current_depth == 0:
+            print("check (c={})(d={:2d})(score={})".format(best.c, best.d, best.score))
+            print(best.cycle)
+
+        if current_depth < self.search_depth:
+            for i, move in enumerate(moves):
+                if is_max:         
+                    best_kid = self.expectimax(current_depth + 1, move, not is_max)
+                    if (is_max and best_kid.score < best.score) or (not is_max and best_kid.score > best.score):
+                        best = move
+                        best.score = best_kid.score
+                    if current_depth == 0:
+                        print("check (c={0})(d={1:2d})(score={2}) -> (c={3},d={4:2d},s={5})".format(
+                            self.rushhour.color[move.c][0], move.d, move.score,
+                            self.rushhour.color[best.c][0], best.d, best.score))
+                        print(move.cycle)
+                else:
+                    best.score += random_probs[i] * self.expectimax(current_depth + 1, move, not is_max).score
+        return best
 
     def decide_best_move_1(self):
         self.state = self.minimax_1(0, self.state)
@@ -314,12 +334,11 @@ class MiniMaxSearch:
 
     def decide_best_move_pruning(self, is_max):
         self.state = self.minimax_pruning(0, self.state, is_max, -math.inf, math.inf)
-        self.print_move(True, self.state)
-        self.rushhour.print_pretty_grid(self.state)
 
     def decide_best_move_expectimax(self, is_max):
-        # TODO
-        pass
+        self.state = self.expectimax(0, self.state, is_max)
+        self.print_move(True, self.state)
+        self.rushhour.print_pretty_grid(self.state)
 
     def solve(self, state, is_singleplayer):
         self.state = state
@@ -331,7 +350,8 @@ class MiniMaxSearch:
             is_max = True 
             while not self.state.success():
                 # self.decide_best_move_2(is_max=is_max)
-                self.decide_best_move_pruning(is_max=is_max)
+                # self.decide_best_move_pruning(is_max=is_max)
+                self.decide_best_move_expectimax(is_max=is_max)
                 is_max = not is_max
 
     def print_move(self, is_max, state):
@@ -384,25 +404,26 @@ class MiniMaxSearch:
 # algo.solve(s, False)
 
 # solution optimale: 14 moves
-# rh = Rushhour([True, False, True, False, False, False, True, True, False, True, True],
-#                  [2, 2, 3, 2, 2, 3, 3, 2, 2, 2, 2],
-#                  [2, 0, 0, 3, 4, 5, 3, 5, 2, 5, 4],
-#                  ["rouge", "vert", "mauve", "orange", "emeraude", "lime", "jaune", "bleu", "x", "y", "z"])
-# s = State([0, 0, 3, 1, 2, 1, 0, 0, 4, 3, 4])
-# algo = MiniMaxSearch(rh, s,2)
-# algo.rushhour.init_positions(s)
-# print(algo.rushhour.free_pos)
-# algo.solve(s, True)
-
-rh = Rushhour([True, False, False, False, True],
-                 [2, 3, 2, 3, 3],
-                 [2, 4, 5, 1, 5],
-                 ["rouge", "vert", "bleu", "orange", "jaune"])
-s = State([1, 0, 1, 3, 2])
-algo = MiniMaxSearch(rh, s,3)
+rh = Rushhour([True, False, True, False, False, False, True, True, False, True, True],
+                 [2, 2, 3, 2, 2, 3, 3, 2, 2, 2, 2],
+                 [2, 0, 0, 3, 4, 5, 3, 5, 2, 5, 4],
+                 ["rouge", "vert", "mauve", "orange", "emeraude", "lime", "jaune", "bleu", "x", "y", "z"])
+s = State([0, 0, 3, 1, 2, 1, 0, 0, 4, 3, 4])
+algo = MiniMaxSearch(rh, s,2)
 algo.rushhour.init_positions(s)
 print(algo.rushhour.free_pos)
 algo.solve(s, False)
+
+# solution optimale: 9 moves
+# rh = Rushhour([True, False, False, False, True],
+#                  [2, 3, 2, 3, 3],
+#                  [2, 4, 5, 1, 5],
+#                  ["rouge", "vert", "bleu", "orange", "jaune"])
+# s = State([1, 0, 1, 3, 2])
+# algo = MiniMaxSearch(rh, s,3)
+# algo.rushhour.init_positions(s)
+# print(algo.rushhour.free_pos)
+# algo.solve(s, False)
 
 algo.print_history()
 
