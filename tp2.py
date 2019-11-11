@@ -57,7 +57,10 @@ class State:
                 x,y = y,x
 
             next_car = self.find_car(rh, x, y)
-            if next_car is None:
+            if self.rock is not None and x == self.rock[0] and y == self.rock[1]:
+                cost += 10
+                break # Inutile de prendre en compte le reste la chaine puisqu'elle est bloquee
+            elif next_car is None:
                 cost += 1
             elif next_car in self.cycle:
                 cost += 30 # Eviter les cycles recursifs
@@ -106,8 +109,6 @@ class State:
                         car_weight += self.cost_to_free(rh, 2, rh.move_on[i]) + 2*rh.move_on[i]
                         self.cycle.add(i)
         self.score = (6 - self.pos[0] - 2) + car_weight + 2*len(self.cycle)
-        # if self.c not in self.cycle:
-        #     self.score += 100
         return self.score
     
     def success(self):
@@ -132,7 +133,6 @@ class State:
 
 
 class Rushhour:
-    
     def __init__(self, horiz, length, move_on, color=None):
         self.nbcars = len(horiz)
         self.horiz = horiz
@@ -179,7 +179,7 @@ class Rushhour:
                     if row == state.rock[0] or column == state.rock[1]:
                         continue
                 if self.free_pos[row][column]:
-                    new_states.append((row, column))
+                    new_states.append(state.put_rock((row, column)))
         return new_states
     
 
@@ -195,8 +195,6 @@ class Rushhour:
                     grid[pos][self.move_on[car]] = self.color[car][0]
         if state.rock is not None:
             grid[state.rock] = 'x'
-        # for row in grid:
-        #     print(''.join(row))
         print(grid)
 
 class MiniMaxSearch:
@@ -211,9 +209,6 @@ class MiniMaxSearch:
             move.score_state(self.rushhour)
         best = min(moves, key=lambda x: x.score)
         
-        if current_depth == 0:
-            print("check (c={})(d={:2d})(score={})".format(best.c, best.d, best.score))
-            print(best.cycle)
         if current_depth < self.search_depth:
             for move in moves:          
                 best_kid = self.minimax_1(current_depth + 1, move)
@@ -223,16 +218,34 @@ class MiniMaxSearch:
                     # Associe la valeur du meilleur enfant a son parent
                     best = move
                     best.score = best_kid.score
+        return best
+    
+    def minimax_2(self, current_depth, current_state, is_max): 
+        moves = self.rushhour.possible_moves(current_state) if is_max else self.rushhour.possible_rock_moves(current_state)
+        for move in moves:
+                move.score_state(self.rushhour)
+        
+        if is_max:
+            best = min(moves, key=lambda x: x.score)
+        else:
+            best = max(moves, key=lambda x: x.score)
+
+        if current_depth == 0:
+            print("check (c={})(d={:2d})(score={})".format(best.c, best.d, best.score))
+            print(best.cycle)
+
+        if current_depth < self.search_depth:
+            for move in moves:          
+                best_kid = self.minimax_2(current_depth + 1, move, not is_max)
+                if (is_max and best_kid.score < best.score) or (not is_max and best_kid.score > best.score):
+                    best = move
+                    best.score = best_kid.score
                 if current_depth == 0:
                     print("check (c={0})(d={1:2d})(score={2}) -> (c={3},d={4:2d},s={5})".format(
                         self.rushhour.color[move.c][0], move.d, move.score,
                         self.rushhour.color[best.c][0], best.d, best.score))
                     print(move.cycle)
         return best
-    
-    def minimax_2(self, current_depth, current_state, is_max): 
-        #TODO
-        return best_move
 
     def minimax_pruning(self, current_depth, current_state, is_max, alpha, beta):
         #TODO
@@ -248,8 +261,9 @@ class MiniMaxSearch:
         self.rushhour.print_pretty_grid(self.state)
 
     def decide_best_move_2(self, is_max):
-        #TODO
-        pass
+        self.state = self.minimax_2(0, self.state, is_max)
+        self.print_move(True, self.state)
+        self.rushhour.print_pretty_grid(self.state)
 
     def decide_best_move_pruning(self, is_max):
         # TODO
@@ -260,26 +274,16 @@ class MiniMaxSearch:
         pass
 
     def solve(self, state, is_singleplayer):
-         if is_singleplayer:
-#             visited = set()
-#             fifo = deque([state])
-#             visited.add(state)
-#             visit_count = 0
-
-#             while fifo:
-#                 visit_count += 1
-#                 current_node = fifo.popleft()            
-#                 if current_node.success():
-#                     print("[Solve] {} Etats visites".format(visit_count))
-#                     return current_node
-#                 for elem in self.possible_moves(current_node):
-#                     if elem not in visited:
-#                         fifo.append(elem)
-#                         visited.add(elem)
-            self.state = state
-            self.rushhour.print_pretty_grid(self.state)
+        self.state = state
+        if is_singleplayer:
             while not self.state.success():
                 self.decide_best_move_1()
+        else:
+            self.rushhour.print_pretty_grid(self.state)
+            is_max = True 
+            while not self.state.success():
+                self.decide_best_move_2(is_max=is_max)
+                is_max = not is_max
 
     def print_move(self, is_max, state):
         if state.c is None:
@@ -328,7 +332,7 @@ s = State([1, 0, 1, 4, 2, 4, 0, 1])
 algo = MiniMaxSearch(rh, s, 2) 
 algo.rushhour.init_positions(s)
 print(algo.rushhour.free_pos)
-algo.solve(s, True)
+algo.solve(s, False)
 
 # solution optimale: 14 moves
 # rh = Rushhour([True, False, True, False, False, False, True, True, False, True, True],
@@ -343,3 +347,5 @@ algo.solve(s, True)
 
 
 algo.print_history()
+
+
