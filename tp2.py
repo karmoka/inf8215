@@ -49,9 +49,8 @@ class State:
     
     def calc_cost(self, rh, car, range_to_check):
         if range_to_check is None:
-            return 1000
-        # cost = len(range_to_check)
-        cost = len(range_to_check)
+            return 1000 # There's nowhere to go, so we return a value that will not be considered
+        cost = 2*len(range_to_check)
         for i in range_to_check:
             x, y = (rh.move_on[car], i)
             if not rh.horiz[car]:
@@ -59,12 +58,11 @@ class State:
 
             next_car = self.find_car(rh, x, y)
             if next_car is None:
-                cost += rh.length[car]
-                continue
-            if next_car in self.cycle:
-                cost += 10 # Eviter les cycles recursifs
-                continue
-            cost += self.cost_to_free(rh, x, y)
+                cost += 1
+            elif next_car in self.cycle:
+                cost += 30 # Eviter les cycles recursifs
+            else:
+                cost += self.cost_to_free(rh, x, y)
         return cost
         
     
@@ -103,9 +101,11 @@ class State:
                 if rh.move_on[i] > self.pos[0] + 1:
                     # Seulement si l'auto s'etend sur la rangee de l'auto (ligne 2)
                     if self.pos[i] <= 2 and (self.pos[i] + rh.length[i] - 1 ) >= 2:
-                        car_weight += self.cost_to_free(rh, 2, rh.move_on[i])
+                        car_weight += self.cost_to_free(rh, 2, rh.move_on[i]) + 2*rh.move_on[i]
                         self.cycle.add(i)
-        self.score = (6 - self.pos[0] - 2) + car_weight + 10*len(self.cycle)
+        self.score = (6 - self.pos[0] - 2) + car_weight + 2*len(self.cycle)
+        # if self.c not in self.cycle:
+        #     self.score += 100
         return self.score
     
     def success(self):
@@ -205,8 +205,6 @@ class MiniMaxSearch:
 
     def minimax_1(self, current_depth, current_state):
         moves = self.rushhour.possible_moves(current_state)
-        if self.state in moves:
-            moves.remove(self.state)
         for move in moves:
             move.score_state(self.rushhour)
         best = min(moves, key=lambda x: x.score)
@@ -216,18 +214,24 @@ class MiniMaxSearch:
             print(best.cycle)
         if current_depth < self.search_depth:
             for move in moves:
-                if move.c == self.state.c and move.d == self.state.d * -1:
-                    continue
-                # Associe la valeur du meilleur enfant a son parent
+                # Pour sauver du temps, on ne considere pas les mouvements directement opposé au précédent
+                # if move.c == self.state.c and move.d == self.state.d * -1:
+                #     continue
+                
                 best_kid = self.minimax_1(current_depth + 1, move)
+                # if move.c not in best_kid.cycle:
+                #     best_kid.score += 200
 
                 # Si le futur de ce mouvement est avantageux, on l'adopte
                 # On ne veut pas bouger des voitures qui ne bloquent rien et ne sont pas dams le chemin de la voiture rouge (pas dans un cycle)
-                if move.c in best_kid.cycle and best_kid.score <= best.score: 
+                if best_kid.score < best.score:
+                    # Associe la valeur du meilleur enfant a son parent
                     best = move
                     best.score = best_kid.score
                 if current_depth == 0:
-                    print("check (c={})(d={:2d})(score={})".format(move.c, move.d, best.score))
+                    print("check (c={0})(d={1:2d})(score={2}) -> (c={3},d={4:2d},s={5})".format(
+                        self.rushhour.color[move.c][0], move.d, move.score,
+                        self.rushhour.color[best.c][0], best.d, best.score))
                     print(move.cycle)
         return best
     
@@ -325,7 +329,7 @@ class MiniMaxSearch:
 #                  [2, 0, 0, 0, 5, 4, 5, 3],
 #                  ["rouge", "vert", "mauve", "orange", "emeraude", "lime", "jaune", "bleu"])
 # s = State([1, 0, 1, 4, 2, 4, 0, 1])
-# algo = MiniMaxSearch(rh, s, 3) 
+# algo = MiniMaxSearch(rh, s, 2) 
 # algo.rushhour.init_positions(s)
 # print(algo.rushhour.free_pos)
 # algo.solve(s, True)
@@ -336,7 +340,7 @@ rh = Rushhour([True, False, True, False, False, False, True, True, False, True, 
                  [2, 0, 0, 3, 4, 5, 3, 5, 2, 5, 4],
                  ["rouge", "vert", "mauve", "orange", "emeraude", "lime", "jaune", "bleu", "x", "y", "z"])
 s = State([0, 0, 3, 1, 2, 1, 0, 0, 4, 3, 4])
-algo = MiniMaxSearch(rh, s,3)
+algo = MiniMaxSearch(rh, s,2)
 algo.rushhour.init_positions(s)
 print(algo.rushhour.free_pos)
 algo.solve(s, True)
